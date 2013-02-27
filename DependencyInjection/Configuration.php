@@ -20,6 +20,7 @@ class Configuration implements ConfigurationInterface
         $rootNode
             ->append($this->getVendorNode('orm'))
             ->append($this->getVendorNode('mongodb'))
+            ->append($this->getVendorNode('phpcr'))
             ->append($this->getClassNode())
             ->append($this->getUploadableNode())
             ->children()

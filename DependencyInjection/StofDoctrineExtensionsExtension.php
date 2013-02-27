@@ -11,9 +11,10 @@ use Symfony\Component\DependencyInjection\Reference;
 
 class StofDoctrineExtensionsExtension extends Extension
 {
-    private $entityManagers   = array();
-    private $documentManagers = array();
-    private $defaultFilePath  = false;
+    private $entityManagers         = array();
+    private $documentManagers       = array();
+    private $phpcrDocumentManagers  = array();
+    private $defaultFilePath        = false;
 
     public function load(array $configs, ContainerBuilder $container)
     {
@@ -80,6 +81,27 @@ class StofDoctrineExtensionsExtension extends Extension
             $this->documentManagers[$name] = $listeners;
         }
 
+        foreach ($config['phpcr'] as $name => $listeners) {
+            foreach ($listeners as $ext => $enabled) {
+                $listener = sprintf('stof_doctrine_extensions.listener.%s', $ext);
+                if ($enabled && $container->hasDefinition($listener)) {
+                    $attributes = array('connection' => $name);
+                    if ('translatable' === $ext) {
+                        $useTranslatable = true;
+                        // the translatable listener must be registered after others to work with them properly
+                        $attributes['priority'] = -10;
+                    } elseif ('loggable' === $ext) {
+                        $useLoggable = true;
+                    } elseif ('blameable' === $ext) {
+                        $useBlameable = true;
+                    }
+                    $definition = $container->getDefinition($listener);
+                    $definition->addTag('doctrine_phpcr.event_subscriber', $attributes);
+                }
+            }
+            $this->phpcrDocumentManagers[$name] = $listeners;
+        }
+
         if ($useTranslatable) {
             $container->getDefinition('stof_doctrine_extensions.event_listener.locale')
                 ->setPublic(true)
@@ -133,6 +155,12 @@ class StofDoctrineExtensionsExtension extends Extension
         foreach (array_keys($this->documentManagers) as $name) {
             if (!$container->hasDefinition(sprintf('doctrine_mongodb.odm.%s_document_manager', $name))) {
                 throw new \InvalidArgumentException(sprintf('Invalid %s config: document manager "%s" not found', $this->getAlias(), $name));
+            }
+        }
+
+        foreach (array_keys($this->phpcrDocumentManagers) as $name) {
+            if (!$container->hasDefinition(sprintf('doctrine_phpcr.odm.%s_document_manager', $name))) {
+                throw new \InvalidArgumentException(sprintf('Invalid %s config: PHPCR document manager "%s" not found', $this->getAlias(), $name));
             }
         }
     }
